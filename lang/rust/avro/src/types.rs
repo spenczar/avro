@@ -1007,13 +1007,13 @@ mod tests {
         decimal::Decimal,
         duration::{Days, Duration, Millis, Months},
         schema::{Name, RecordField, RecordFieldOrder, Schema, UnionSchema},
-        types::Value,
         to_value,
+        types::Value,
     };
     use apache_avro_test_helper::logger::{assert_logged, assert_not_logged};
     use pretty_assertions::assert_eq;
+    use serde::{Deserialize, Serialize};
     use uuid::Uuid;
-    use serde::{Serialize, Deserialize};
 
     #[test]
     fn validate() {
@@ -2636,14 +2636,12 @@ Field with name '"b"' is not a member of the map items"#,
 
     #[derive(Debug, Serialize, Deserialize)]
     struct TestStructFixedField {
-        field: [u8; 6]
+        field: [u8; 6],
     }
 
     #[test]
     fn test_avro_3631_serialize_fixed_fields() {
-        let test = TestStructFixedField {
-            field: [1; 6]
-        };
+        let test = TestStructFixedField { field: [1; 6] };
         let value: Value = to_value(test).unwrap();
         let schema = Schema::parse_str(
             r#"
@@ -2661,8 +2659,9 @@ Field with name '"b"' is not a member of the map items"#,
                     }
                 ]
             }
-            "#
-        ).unwrap();
+            "#,
+        )
+        .unwrap();
         assert!(value.validate(&schema));
     }
 }
