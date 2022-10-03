@@ -1013,7 +1013,6 @@ mod tests {
     use apache_avro_test_helper::logger::{assert_logged, assert_not_logged};
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
-    use serde_bytes::ByteArray;
     use uuid::Uuid;
 
     #[test]
@@ -2639,12 +2638,11 @@ Field with name '"b"' is not a member of the map items"#,
     fn avro_3631_test_serialize_fixed_fields() {
         #[derive(Debug, Serialize, Deserialize)]
         struct TestStructFixedField {
-            field: ByteArray<6>,
+            #[serde(with = "serde_bytes")]
+            field: [u8; 6],
         }
 
-        let test = TestStructFixedField {
-            field: ByteArray::new([1; 6]),
-        };
+        let test = TestStructFixedField { field: [1; 6] };
         let value: Value = to_value(test).unwrap();
         let schema = Schema::parse_str(
             r#"

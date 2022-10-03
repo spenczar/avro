@@ -600,7 +600,6 @@ pub fn from_value<'de, D: Deserialize<'de>>(value: &'de Value) -> Result<D, Erro
 mod tests {
     use pretty_assertions::assert_eq;
     use serde::Serialize;
-    use serde_bytes::ByteArray;
     use uuid::Uuid;
 
     use super::*;
@@ -1131,7 +1130,8 @@ mod tests {
     fn avro_3631_test_struct_fixed_field() {
         #[derive(Debug, Serialize, Deserialize)]
         struct TestStructFixedField {
-            field: ByteArray<6>,
+            #[serde(with = "serde_bytes")]
+            field: [u8; 6],
         }
 
         let value = Value::Record(vec![(
