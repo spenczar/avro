@@ -174,7 +174,7 @@ impl<'b> ser::Serializer for &'b mut Serializer {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error> {
-        Ok(Value::Bytes(v.to_owned()))
+        Ok(Value::Fixed(v.len(), v.to_owned()))
     }
 
     fn serialize_none(self) -> Result<Self::Ok, Self::Error> {
@@ -487,6 +487,7 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use serde::{Deserialize, Serialize};
+    use serde_bytes::ByteArray;
 
     #[derive(Debug, Deserialize, Serialize, Clone)]
     struct Test {
@@ -679,7 +680,7 @@ mod tests {
 
     #[derive(Debug, Serialize, Deserialize)]
     struct TestStructFixedField {
-        field: [u8; 6],
+        field: ByteArray<6>,
     }
 
     #[test]
@@ -1005,15 +1006,17 @@ mod tests {
     }
 
     #[test]
-    fn test_to_value_fixed_field_avro_3631() {
-        let test = TestStructFixedField { field: [1; 6] };
+    fn avro_3631_test_to_value_fixed_field() {
+        let test = TestStructFixedField {
+            field: ByteArray::new([1; 6]),
+        };
         let expected = Value::Record(vec![(
             "field".to_owned(),
-            Value::Fixed(6, Vec::from(test.field.clone())),
+            Value::Fixed(6, Vec::from(test.field.clone().into_array())),
         )]);
         assert_eq!(
-            to_value(test).unwrap(),
             expected,
+            to_value(test).unwrap(),
             "error serializing fixed array"
         );
     }
