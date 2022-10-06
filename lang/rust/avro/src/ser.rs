@@ -1117,7 +1117,7 @@ mod tests {
             ),
             (
                 "vec_field2".to_owned(),
-                Value::Fixed(2, Vec::from(test.vec_field2.clone())),
+                Value::Fixed(2, test.vec_field2.clone()),
             ),
             (
                 "bytes_field".to_owned(),
@@ -1129,7 +1129,7 @@ mod tests {
             ),
             (
                 "vec_field3".to_owned(),
-                Value::Bytes(Vec::from(test.vec_field3.clone())),
+                Value::Bytes(test.vec_field3.clone()),
             ),
         ]);
         assert_eq!(expected, to_value(test).unwrap());
