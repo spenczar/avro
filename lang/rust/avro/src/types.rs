@@ -538,7 +538,10 @@ impl Value {
                     }
                 })
             }
-            (_v, _s) => Some("Unsupported value-schema combination".to_string()),
+            (v, s) => Some(format!(
+                "Unsupported value-schema combination: \nValue: {:?},\nSchema: {:?}",
+                v, s
+            )),
         }
     }
 
@@ -2637,12 +2640,20 @@ Field with name '"b"' is not a member of the map items"#,
     #[test]
     fn avro_3631_test_serialize_fixed_fields() {
         #[derive(Debug, Serialize, Deserialize)]
-        struct TestStructFixedField {
+        struct TestStructFixedField<'a> {
+            bytes_field: &'a [u8],
+            vec_field: Vec<u8>,
             #[serde(with = "serde_bytes")]
-            field: [u8; 6],
+            fixed_field: [u8; 6],
+            // #[serde(with = "serde_bytes")]
+            // #[serde(with = "serde_bytes")]
         }
 
-        let test = TestStructFixedField { field: [1; 6] };
+        let test = TestStructFixedField {
+            bytes_field: &[1, 2, 3],
+            fixed_field: [1; 6],
+            vec_field: vec![2, 3, 4],
+        };
         let value: Value = to_value(test).unwrap();
         let schema = Schema::parse_str(
             r#"
@@ -2651,9 +2662,17 @@ Field with name '"b"' is not a member of the map items"#,
                 "name": "TestStructFixedField",
                 "fields": [
                     {
-                        "name": "field",
+                        "name": "bytes_field",
+                        "type": "bytes"
+                    },
+                    {
+                        "name": "vec_field",
+                        "type": "bytes"
+                    },
+                    {
+                        "name": "fixed_field",
                         "type": {
-                            "name": "field",
+                            "name": "fixed_field",
                             "type": "fixed",
                             "size": 6
                         }
