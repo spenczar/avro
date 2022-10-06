@@ -2639,11 +2639,14 @@ Field with name '"b"' is not a member of the map items"#,
 
     #[test]
     fn avro_3631_test_serialize_fixed_fields() {
+        use crate::{avro_serialize_bytes, avro_serialize_fixed};
+
         #[derive(Debug, Serialize, Deserialize)]
         struct TestStructFixedField<'a> {
+            #[serde(serialize_with = "avro_serialize_bytes")]
             bytes_field: &'a [u8],
             vec_field: Vec<u8>,
-            #[serde(with = "serde_bytes")]
+            #[serde(serialize_with = "avro_serialize_fixed")]
             fixed_field: [u8; 6],
             // #[serde(with = "serde_bytes")]
             // #[serde(with = "serde_bytes")]
