@@ -21,6 +21,8 @@ use serde::{
     de::{self, DeserializeSeed, Visitor},
     forward_to_deserialize_any, Deserialize,
 };
+use std::fmt::Formatter;
+use std::marker::PhantomData;
 use std::{
     collections::{
         hash_map::{Keys, Values},
@@ -326,10 +328,28 @@ impl<'a, 'de> de::Deserializer<'de> for &'a Deserializer<'de> {
         V: Visitor<'de>,
     {
         match *self.input {
+            Value::Array(ref values) => {
+                let bytes: Result<Vec<u8>, Self::Error> = values
+                    .iter()
+                    .map(|v| match v {
+                        Value::Int(i) if *i <= (u8::MAX as i32) && *i >= (u8::MIN as i32) => {
+                            Ok(*i as u8)
+                        }
+                        _ => Err(de::Error::custom(format!(
+                            "Byte array can be created only from Value::Int values which could be casted to u8: {:?}",
+                            v
+                        ))),
+                    })
+                    .collect();
+                visitor.visit_byte_buf(bytes?)
+            }
             Value::String(ref s) => visitor.visit_bytes(s.as_bytes()),
             Value::Bytes(ref bytes) | Value::Fixed(_, ref bytes) => visitor.visit_bytes(bytes),
             Value::Uuid(ref u) => visitor.visit_bytes(u.as_bytes()),
-            _ => Err(de::Error::custom("not a string|bytes|fixed|uuid")),
+            _ => Err(de::Error::custom(format!(
+                "not a array<u8>|string|bytes|fixed|uuid: {:?}",
+                *self.input
+            ))),
         }
     }
 
@@ -399,11 +419,24 @@ impl<'a, 'de> de::Deserializer<'de> for &'a Deserializer<'de> {
     {
         match *self.input {
             Value::Array(ref items) => visitor.visit_seq(SeqDeserializer::new(items)),
+            Value::Fixed(_len, ref items) => {
+                let mut arr = [0_u8; 6];
+                arr.clone_from_slice(items);
+                visitor.visit_bytes(&arr)
+            }
             Value::Union(_i, ref inner) => match **inner {
                 Value::Array(ref items) => visitor.visit_seq(SeqDeserializer::new(items)),
-                _ => Err(de::Error::custom("not an array")),
+                Value::Fixed(_len, ref items) => {
+                    let mut arr = [0_u8; 6];
+                    arr.clone_from_slice(items);
+                    visitor.visit_bytes(&arr)
+                }
+                _ => Err(de::Error::custom(format!("not an array: {:?}", **inner))),
             },
-            _ => Err(de::Error::custom("not an array")),
+            _ => Err(de::Error::custom(format!(
+                "not an array: {:?}",
+                *self.input
+            ))),
         }
     }
 
@@ -595,6 +628,65 @@ pub fn from_value<'de, D: Deserialize<'de>>(value: &'de Value) -> Result<D, Erro
     let de = Deserializer::new(value);
     D::deserialize(&de)
 }
+
+/// A function that could be used by #[serde(deserialize_with = ...)] to give a
+/// hint to Avro's `Deserializer` how to deserialize a value like `Value::Fixed`
+/// to byte array like `[u8; N]`
+// #[allow(dead_code)]
+// pub fn avro_deserialize_bytes<'de, 'a: 'de, D>(deserializer: D) -> Result<&'a [u8], D::Error>
+// where
+//     D: de::Deserializer<'de>,
+// {
+//     struct BytesVisitor<'a> {
+//         marker: PhantomData<&'a [u8]>,
+//     }
+//
+//     impl<'de, 'a> Visitor<'de> for BytesVisitor<'a> {
+//         type Value = &'a [u8];
+//
+//         fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+//             formatter.write_str("a byte array reference, e.g. &[u8]")
+//         }
+//
+//         fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+//         where
+//             E: de::Error,
+//         {
+//             Ok(v.clone())
+//         }
+//     }
+//
+//     deserializer.deserialize_bytes(BytesVisitor {
+//         marker: PhantomData,
+//     })
+// }
+//
+// #[allow(dead_code)]
+// pub fn avro_deserialize_fixed<'de, D, const N: usize>(deserializer: D) -> Result<[u8; N], D::Error>
+// where
+//     D: de::Deserializer<'de>,
+// {
+//     struct FixedVisitor<const N: usize>;
+//
+//     impl<'de, const N: usize> Visitor<'de> for FixedVisitor<N> {
+//         type Value = [u8; N];
+//
+//         fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+//             formatter.write_str("a byte array with length, e.g. [u8; N]")
+//         }
+//
+//         fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+//         where
+//             E: de::Error,
+//         {
+//             let mut res = [0_u8; N];
+//             res.clone_from_slice(v);
+//             Ok(res)
+//         }
+//     }
+//
+//     deserializer.deserialize_bytes(FixedVisitor::<N>)
+// }
 
 #[cfg(test)]
 mod tests {
@@ -1127,17 +1219,88 @@ mod tests {
     }
 
     #[test]
-    fn avro_3631_test_struct_fixed_field() {
-        #[derive(Debug, Serialize, Deserialize)]
-        struct TestStructFixedField {
+    fn avro_3631_deserialize_value_to_struct_with_byte_types() {
+        #[derive(Debug, Deserialize, PartialEq)]
+        struct TestStructFixedField /*<'a>*/ {
+            // will be serialized as Value::Array<Vec<Value::Int>>
+            // array_field: &'a [u8],
+            // vec_field: Vec<u8>,
+
+            // will be serialized as Value::Fixed
+            // #[serde(deserialize_with = "avro_deserialize_fixed")]
             #[serde(with = "serde_bytes")]
-            field: [u8; 6],
+            fixed_field: [u8; 6],
+            // #[serde(serialize_with = "avro_serialize_fixed")]
+            // fixed_field2: &'a [u8],
+            // #[serde(serialize_with = "avro_serialize_fixed")]
+            // vec_field2: Vec<u8>,
+
+            // will be serialized as Value::Bytes
+            // #[serde(serialize_with = "avro_serialize_bytes")]
+            // bytes_field: &'a [u8],
+            // #[serde(serialize_with = "avro_serialize_bytes")]
+            // bytes_field2: [u8; 6],
+            // #[serde(serialize_with = "avro_serialize_bytes")]
+            // vec_field3: Vec<u8>,
         }
 
-        let value = Value::Record(vec![(
-            "field".to_string(),
-            Value::Fixed(6, vec![0, 0, 0, 0, 0, 0]),
-        )]);
-        let _deserialized: TestStructFixedField = from_value(&value).unwrap();
+        let expected = TestStructFixedField {
+            // array_field: &[1, 11, 111],
+            // bytes_field: &[2, 22, 222],
+            // bytes_field2: [2; 6],
+            fixed_field: [1; 6],
+            // fixed_field2: &[6, 66],
+            // vec_field: vec![3, 33],
+            // vec_field2: vec![4, 44],
+            // vec_field3: vec![5, 55],
+        };
+
+        let value = Value::Record(vec![
+            // (
+            //     "array_field".to_owned(),
+            //     Value::Array(
+            //         expected
+            //             .array_field
+            //             .iter()
+            //             .map(|i| Value::Int(*i as i32))
+            //             .collect(),
+            //     ),
+            // ),
+            // (
+            //     "vec_field".to_owned(),
+            //     Value::Array(
+            //         expected
+            //             .vec_field
+            //             .iter()
+            //             .map(|i| Value::Int(*i as i32))
+            //             .collect(),
+            //     ),
+            // ),
+            (
+                "fixed_field".to_owned(),
+                Value::Fixed(6, Vec::from(expected.fixed_field)),
+            ),
+            // (
+            //     "fixed_field2".to_owned(),
+            //     Value::Fixed(2, Vec::from(expected.fixed_field2)),
+            // ),
+            // (
+            //     "vec_field2".to_owned(),
+            //     Value::Fixed(2, expected.vec_field2.clone()),
+            // ),
+            // (
+            //     "bytes_field".to_owned(),
+            //     Value::Bytes(Vec::from(expected.bytes_field)),
+            // ),
+            // (
+            //     "bytes_field2".to_owned(),
+            //     Value::Bytes(Vec::from(expected.bytes_field2)),
+            // ),
+            // (
+            //     "vec_field3".to_owned(),
+            //     Value::Bytes(expected.vec_field3.clone()),
+            // ),
+        ]);
+        assert_eq!(expected, from_value(&value).unwrap());
     }
 }
