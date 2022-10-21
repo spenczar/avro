@@ -21,13 +21,13 @@ use serde::{
     de::{self, DeserializeSeed, Visitor},
     forward_to_deserialize_any, Deserialize,
 };
-use std::fmt::Formatter;
-use std::marker::PhantomData;
 use std::{
     collections::{
         hash_map::{Keys, Values},
         HashMap,
     },
+    fmt::Formatter,
+    marker::PhantomData,
     slice::Iter,
 };
 
