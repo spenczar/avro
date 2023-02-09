@@ -68,6 +68,7 @@ dependencies = [
  "ref_thread_local",
  "regex",
  "serde",
+ "serde_bytes",
  "serde_json",
  "sha2",
  "snap",
@@ -874,19 +875,7 @@ dependencies = [
 [[package]]
 name = "serde_bytes"
 version = "0.11.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfc50e8183eeeb6178dcb167ae34a8051d63535023ae38b5d8d12beae193d37b"
 dependencies = [
- "serde",
-]
-
-[[package]]
-name = "serde_cbor"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
-dependencies = [
- "half",
  "serde",
 ]
 
